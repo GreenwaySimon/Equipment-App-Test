@@ -649,14 +649,15 @@ def main():
 
     elif nav_option == "Admin Portal":
         render_header("Admin Management Portal")
-        st.write("Administrative controls for managing inventory, assessment dates, dashboard views, scheduled kit hires, maintenance history, and mobile guides.")
+        st.write("Administrative controls for managing inventory, assessment dates, dashboard views, scheduled kit hires, maintenance history, equipment logs, and mobile guides.")
 
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
             "Manage Equipment",
             "Assessment Dates",
             "Dashboard Views",
             "Scheduled Kit Hire",
             "Maintenance History",
+            "Equipment Log",
             "Mobile App Guide",
         ])
 
@@ -809,6 +810,35 @@ def main():
                 st.info("No damage or maintenance reports have been logged in the system yet.")
 
         with tab6:
+            st.subheader("Complete Equipment Event Log")
+            st.write("View the full chronological history of all check-outs, returns, maintenance reports, and administrative logs.")
+
+            log_asset_filter = st.selectbox(
+                "Filter Log by Asset ID",
+                options=["All Equipment"] + all_asset_ids,
+                key="full_log_asset_filter"
+            )
+
+            if not df_logs.empty:
+                if log_asset_filter != "All Equipment":
+                    filtered_log_rows = []
+                    for _, row in df_logs.iterrows():
+                        eq_str = str(row.get("Equipment IDs", ""))
+                        eq_list = [e.strip() for e in eq_str.split(",") if e.strip()]
+                        if log_asset_filter in eq_list:
+                            filtered_log_rows.append(row)
+                    df_log_display = pd.DataFrame(filtered_log_rows) if filtered_log_rows else pd.DataFrame(columns=df_logs.columns)
+                else:
+                    df_log_display = df_logs
+
+                if not df_log_display.empty:
+                    st.dataframe(df_log_display, use_container_width=True)
+                else:
+                    st.info(f"No event logs found for equipment ID: {log_asset_filter}.")
+            else:
+                st.info("No event logs recorded in the system yet.")
+
+        with tab7:
             st.subheader("Printable Mobile Home Screen Guide")
             st.write("Use this page to print or save instructions for instructors on how to bookmark the inventory app onto their phone home screens.")
 
