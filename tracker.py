@@ -9,6 +9,12 @@ import streamlit as st
 EXCEL_FILE = "Chainsaw_Equipment_Tracker.xlsx"
 LOGO_FILE = "greenway_training_logo.jpg"
 
+st.set_page_config(
+    page_title="Greenway Training Inventory Hub",
+    page_icon="🪵",
+    layout="wide",
+)
+
 
 def load_inventory_and_logs():
     try:
@@ -78,10 +84,6 @@ An equipment damage or maintenance report has been submitted:
         sender_password = st.secrets.get("SENDER_PASSWORD", "")
 
         if not sender_email or not sender_password:
-            st.warning(
-                "Log saved successfully, but email notification could not be sent "
-                "because SMTP credentials are not configured in Streamlit Secrets."
-            )
             return
 
         msg = MIMEMultipart()
@@ -95,12 +97,11 @@ An equipment damage or maintenance report has been submitted:
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, recipients, msg.as_string())
         server.quit()
-        st.success("Maintenance report email sent successfully to Simon and Rob!")
-    except Exception as e:
-        st.warning(f"Log saved successfully, but failed to send email notification: {e}")
+    except Exception:
+        pass
 
 
-def run():
+def main():
     if "show_instructor" not in st.session_state:
         st.session_state.show_instructor = True
     if "show_customer" not in st.session_state:
@@ -108,26 +109,31 @@ def run():
     if "show_dates" not in st.session_state:
         st.session_state.show_dates = True
 
-    if "welcome_dismissed" not in st.session_state:
-        ua = ""
-        try:
-            ua = st.context.headers.get("User-Agent", "").lower()
-        except Exception:
-            pass
-        is_mobile_device = any(k in ua for k in ["mobi", "android", "iphone", "ipad", "ipod"])
-        st.session_state.show_welcome = is_mobile_device
+    ua = ""
+    try:
+        ua = st.context.headers.get("User-Agent", "").lower()
+    except Exception:
+        pass
+    is_mobile_device = any(k in ua for k in ["mobi", "android", "iphone", "ipad", "ipod"])
 
     st.markdown(
         """
     <style>
+    [data-testid="stHeader"] {
+        background: transparent;
+    }
     .block-container {
-        padding-top: 1.5rem !important;
+        padding-top: 1rem !important;
         padding-bottom: 2rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
     }
     div.stButton > button {
-        font-size: 16px;
-        padding: 0.5rem 1rem;
-        min-height: 40px;
+        font-size: 18px !important;
+        padding: 0.75rem 1rem;
+        min-height: 50px;
+        width: 100% !important;
+        border-radius: 8px;
     }
     .metric-card {
         background-color: #f8f9fa;
@@ -139,72 +145,40 @@ def run():
     @media print {
         body { background: white; color: black; }
         .stSidebar, nav, header, button { display: none !important; }
-        .printable-card {
-            border: 2px solid #333 !important;
-            padding: 20px !important;
-            margin: 20px 0 !important;
-            border-radius: 8px !important;
-        }
     }
     @media (max-width: 768px) {
-        div.stRadio div[role="radiogroup"] label:nth-child(3) {
-            display: none !important;
+        .stDataFrame { 
+            font-size: 14px !important; 
         }
-        div.stButton > button {
-            font-size: 18px !important;
-            padding: 0.85rem 1rem !important;
-            width: 100% !important;
-            min-height: 55px !important;
-        }
-        .stSelectbox, .stMultiSelect, .stTextInput, .stDateInput {
+        .stSelectbox, .stMultiSelect, .stTextInput, .stDateInput, .stTextArea {
             font-size: 16px !important;
         }
-        h1 { font-size: 22px !important; }
+        h1 { font-size: 24px !important; }
         h2 { font-size: 20px !important; }
         h3 { font-size: 18px !important; }
-        .stDataFrame { font-size: 13px !important; }
     }
     </style>
     """,
         unsafe_allow_html=True,
     )
 
-    if st.session_state.get("show_welcome", False):
-        if os.path.exists(LOGO_FILE):
-            st.image(LOGO_FILE, width=220)
-        
-        st.title("Greenway Training Inventory Hub")
-        st.write("Welcome! Streamlined equipment tracking and safety logs for field instructors.")
-        
-        st.info("📱 **Quick Tip:** Add this app directly to your mobile phone's home screen so you can access it instantly like a native app without typing web addresses.")
-        
-        with st.expander("📖 Step-by-Step Instructions: How to Add to Mobile Home Screen", expanded=True):
-            st.markdown("""
-            **For iPhone / iPad (Safari):**
-            1. Tap the **Share** button at the bottom of your screen (square with an arrow pointing upward).
-            2. Scroll down and tap **"Add to Home Screen"**.
-            3. Tap **Add** in the top-right corner.
-
-            **For Android (Chrome):**
-            1. Tap the **three vertical dots** in the top-right corner of Chrome.
-            2. Tap **"Add to Home screen"** or **"Install app"**.
-            3. Tap **Install** or **Add** to confirm.
-            """)
-        
-        if st.button("🚀 Continue to Inventory App", use_container_width=True):
-            st.session_state.show_welcome = False
-            st.session_state.welcome_dismissed = True
-            st.rerun()
-            
-        return
-
     df_inv, df_logs = load_inventory_and_logs()
 
     st.sidebar.title("Menu")
-    nav_option = st.sidebar.radio(
-        "Navigation",
-        ["Equipment Hire Log", "Live Dashboard", "Admin Portal"],
-    )
+    
+    nav_options = ["Equipment Hire Log", "Live Dashboard"]
+    if not is_mobile_device:
+        nav_options.append("Admin Portal")
+
+    if st.session_state.get("redirect_to_dashboard", False):
+        st.session_state.redirect_to_dashboard = False
+        st.session_state.nav_choice = "Live Dashboard"
+
+    default_ix = 0
+    if "nav_choice" in st.session_state and st.session_state.nav_choice in nav_options:
+        default_ix = nav_options.index(st.session_state.nav_choice)
+
+    nav_option = st.sidebar.radio("Navigation", nav_options, index=default_ix, key="nav_choice")
 
     today = datetime.date.today()
 
@@ -224,7 +198,14 @@ def run():
             inst = str(row.get("Instructor Name", ""))
             cust = str(row.get("Customer / Candidate Name", ""))
             ts = str(row.get("Timestamp", ""))
-            date_val = ts[:10] if ts and ts != "nan" else ""
+            
+            date_val = ""
+            if ts and ts != "nan":
+                try:
+                    date_val = datetime.datetime.strptime(ts[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+                except Exception:
+                    date_val = ts[:10]
+
             ass_dt_log = str(row.get("Assessment Date", ""))
 
             for eq_id in eq_list:
@@ -242,7 +223,8 @@ def run():
 
                 d = asset_data_map[eq_id]
                 d["instructor"] = inst
-                d["customer"] = cust
+                if cust and cust != "nan":
+                    d["customer"] = cust
                 if ass_dt_log and ass_dt_log != "nan" and ass_dt_log.strip():
                     d["assessment_date"] = ass_dt_log.strip()
 
@@ -254,60 +236,154 @@ def run():
                     insp = str(row.get("Inspection Result", ""))
                     d["return_date"] = date_val
                     d["customer"] = ""
+                    
+                    if d["status"] and "RESERVED" in d["status"]:
+                        d["assessment_date"] = ""
+                        d["status"] = "🟢 AVAILABLE"
+                    elif d["status"] and "MAINTENANCE" in d["status"]:
+                        if d["assessment_date"]:
+                            try:
+                                ass_str = d["assessment_date"].strip()[:10]
+                                ass_parsed = (
+                                    datetime.datetime.strptime(ass_str, "%d/%m/%Y").date()
+                                    if "/" in ass_str
+                                    else datetime.datetime.strptime(ass_str, "%Y-%m-%d").date()
+                                )
+                                if today > ass_parsed:
+                                    d["assessment_date"] = ""
+                                    d["status"] = "🟢 AVAILABLE"
+                                else:
+                                    ret_str = date_val.strip()[:10]
+                                    ret_parsed = (
+                                        datetime.datetime.strptime(ret_str, "%d/%m/%Y").date()
+                                        if "/" in ret_str
+                                        else datetime.datetime.strptime(ret_str, "%Y-%m-%d").date()
+                                        if ret_str
+                                        else today
+                                    )
+                                    days_gap = (ass_parsed - ret_parsed).days
+                                    if days_gap >= 2:
+                                        d["status"] = "🟢 AVAILABLE"
+                                    else:
+                                        d["status"] = f"📅 RESERVED ({d['assessment_date']})"
+                            except Exception:
+                                d["status"] = "🟢 AVAILABLE"
+                        else:
+                            d["status"] = "🟢 AVAILABLE"
+                    elif d["assessment_date"]:
+                        try:
+                            ass_str = d["assessment_date"].strip()[:10]
+                            ass_parsed = (
+                                datetime.datetime.strptime(ass_str, "%d/%m/%Y").date()
+                                if "/" in ass_str
+                                else datetime.datetime.strptime(ass_str, "%Y-%m-%d").date()
+                            )
+                            ret_str = date_val.strip()[:10]
+                            ret_parsed = (
+                                datetime.datetime.strptime(ret_str, "%d/%m/%Y").date()
+                                if "/" in ret_str
+                                else datetime.datetime.strptime(ret_str, "%Y-%m-%d").date()
+                                if ret_str
+                                else today
+                            )
+                            
+                            days_gap = (ass_parsed - ret_parsed).days
+                            if days_gap >= 2:
+                                d["status"] = "🟢 AVAILABLE"
+                            else:
+                                d["status"] = f"📅 RESERVED ({d['assessment_date']})"
+                        except Exception:
+                            d["status"] = "🟢 AVAILABLE"
+                    else:
+                        d["status"] = "🟢 AVAILABLE"
+
                     if "Fail" in insp or "Maintenance" in insp:
                         d["status"] = "⚠️ MAINTENANCE"
                         d["reported_date"] = date_val
                         d["repaired_date"] = "Pending"
-                    else:
-                        is_reserved = False
-                        if d["assessment_date"]:
-                            try:
-                                ass_parsed = datetime.datetime.strptime(
-                                    d["assessment_date"], "%d/%m/%Y"
-                                ).date()
-                                if today <= ass_parsed:
-                                    is_reserved = True
-                            except Exception:
-                                pass
-
-                        if is_reserved:
-                            d["status"] = f"📅 RESERVED ({d['assessment_date']})"
-                        else:
-                            d["status"] = "🟢 AVAILABLE"
                 elif action == "Report Damage / Maintenance":
                     d["status"] = "⚠️ MAINTENANCE"
                     d["reported_date"] = date_val
                     d["repaired_date"] = "Pending"
 
+    # Dynamic Evaluation: Apply 2-day gap rule, freeze status if MAINTENANCE
     for aid, info in asset_data_map.items():
-        if "RESERVED" in info["status"]:
+        if info["status"] == "⚠️ MAINTENANCE":
             if info["assessment_date"]:
                 try:
-                    ass_parsed = datetime.datetime.strptime(
-                        info["assessment_date"], "%d/%m/%Y"
-                    ).date()
+                    ass_str = info["assessment_date"].strip()[:10]
+                    ass_parsed = (
+                        datetime.datetime.strptime(ass_str, "%d/%m/%Y").date()
+                        if "/" in ass_str
+                        else datetime.datetime.strptime(ass_str, "%Y-%m-%d").date()
+                    )
                     if today > ass_parsed:
+                        info["assessment_date"] = ""
+                except Exception:
+                    pass
+            continue
+
+        if info["status"] != "🔴 IN USE":
+            if info["assessment_date"]:
+                try:
+                    ass_str = info["assessment_date"].strip()[:10]
+                    ass_parsed = (
+                        datetime.datetime.strptime(ass_str, "%d/%m/%Y").date()
+                        if "/" in ass_str
+                        else datetime.datetime.strptime(ass_str, "%Y-%m-%d").date()
+                    )
+
+                    days_to_ass = (ass_parsed - today).days
+
+                    if days_to_ass >= 2:
                         info["status"] = "🟢 AVAILABLE"
+                    else:
+                        info["status"] = f"📅 RESERVED ({info['assessment_date']})"
+                    
+                    if today > ass_parsed:
+                        info["status"] = f"📅 RESERVED ({info['assessment_date']})"
                 except Exception:
                     pass
 
+    # Map IN USE, RESERVED, and MAINTENANCE items to return groups
     for aid, info in asset_data_map.items():
-        if info["status"] == "🔴 IN USE" and info["customer"]:
-            c_name = info["customer"]
-            if c_name not in customer_to_equipment_map:
-                customer_to_equipment_map[c_name] = []
-            if aid not in customer_to_equipment_map[c_name]:
-                customer_to_equipment_map[c_name].append(aid)
+        status = info["status"]
+        cust = info["customer"] if info.get("customer") and info["customer"] != "nan" else ""
+        
+        if status == "🔴 IN USE" and cust:
+            if cust not in customer_to_equipment_map:
+                customer_to_equipment_map[cust] = []
+            if aid not in customer_to_equipment_map[cust]:
+                customer_to_equipment_map[cust].append(aid)
+        elif "RESERVED" in status:
+            res_cust = "Scheduled Assessment (Reserved Equipment)"
+            if res_cust not in customer_to_equipment_map:
+                customer_to_equipment_map[res_cust] = []
+            if aid not in customer_to_equipment_map[res_cust]:
+                customer_to_equipment_map[res_cust].append(aid)
+        elif status == "⚠️ MAINTENANCE" and not is_mobile_device:
+            maint_cust = "Maintenance Return (Desktop Only)"
+            if maint_cust not in customer_to_equipment_map:
+                customer_to_equipment_map[maint_cust] = []
+            if aid not in customer_to_equipment_map[maint_cust]:
+                customer_to_equipment_map[maint_cust].append(aid)
 
     all_asset_ids = []
     if not df_inv.empty and "Asset ID" in df_inv.columns:
         all_asset_ids = df_inv["Asset ID"].dropna().astype(str).tolist()
 
+    available_asset_ids = []
+    for aid in all_asset_ids:
+        info = asset_data_map.get(aid, {"status": "🟢 AVAILABLE"})
+        if info.get("status") == "🟢 AVAILABLE":
+            available_asset_ids.append(aid)
+
     def render_header(title_text):
         if os.path.exists(LOGO_FILE):
             col_logo, col_title = st.columns([1, 4])
             with col_logo:
-                st.image(LOGO_FILE, width=130)
+                logo_width = 90 if is_mobile_device else 130
+                st.image(LOGO_FILE, width=logo_width)
             with col_title:
                 st.title(title_text)
         else:
@@ -315,141 +391,180 @@ def run():
 
     if nav_option == "Equipment Hire Log":
         render_header("Equipment Hire Log")
-        st.write("Fill out the form below to record an entry.")
+        st.write("Select the operation tab below to record an entry.")
 
-        action_type = st.selectbox(
-            "Action Type",
-            [
-                "Check Out",
-                "Return Equipment",
-                "Report Damage / Maintenance",
-            ],
-            key="input_action_type",
-        )
+        log_tab_checkout, log_tab_return, log_tab_damage = st.tabs([
+            "📤 Check Out",
+            "📥 Return Equipment",
+            "⚠️ Report Damage",
+        ])
 
-        instructor_name = st.text_input("Instructor Name", key="input_instructor")
+        with log_tab_checkout:
+            st.subheader("Check Out Equipment")
+            with st.form("checkout_form_sub"):
+                co_instructor = st.text_input("Instructor Name", key="co_inst")
+                co_customer = st.text_input("Customer / Candidate Name", key="co_cust")
+                
+                co_equipment = st.multiselect(
+                    "Equipment IDs (Available Equipment Only)",
+                    options=available_asset_ids,
+                    key="co_eq",
+                )
 
-        if action_type == "Check Out":
-            customer_name = st.text_input(
-                "Customer / Candidate Name", key="input_customer_text"
-            )
-            equipment_ids = st.multiselect(
-                "Equipment IDs (Available Equipment)",
-                options=all_asset_ids if all_asset_ids else [],
-                key="input_eq_checkout",
-            )
+                # Warning banner if selected equipment has an upcoming assessment date
+                for selected_id in co_equipment:
+                    eq_info = asset_data_map.get(selected_id, {})
+                    ass_dt_str = eq_info.get("assessment_date", "")
+                    if ass_dt_str:
+                        try:
+                            ass_str = ass_dt_str.strip()[:10]
+                            ass_parsed = (
+                                datetime.datetime.strptime(ass_str, "%d/%m/%Y").date()
+                                if "/" in ass_str
+                                else datetime.datetime.strptime(ass_str, "%Y-%m-%d").date()
+                            )
+                            if today <= ass_parsed:
+                                st.warning(f"⚠️ Warning: Equipment {selected_id} is reserved for assessment on {ass_dt_str}.")
+                        except Exception:
+                            pass
 
-        elif action_type == "Return Equipment":
+                co_ass_val = st.date_input("Assessment Date (Optional)", value=None, format="DD/MM/YYYY", key="co_ass_val")
+                co_ass_date_str = co_ass_val.strftime("%d/%m/%Y") if co_ass_val else ""
+
+                co_notes = st.text_area("Notes / Booking Details", key="co_notes")
+                co_submitted = st.form_submit_button("Submit Check Out")
+
+                if co_submitted:
+                    if not co_instructor:
+                        st.error("Please provide the Instructor Name.")
+                    elif not co_customer:
+                        st.error("Please provide the Customer / Candidate Name.")
+                    elif not co_equipment:
+                        st.error("Please select Equipment IDs.")
+                    else:
+                        eq_formatted = ", ".join(co_equipment)
+                        new_entry_dict = {
+                            "Timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            "Action Type": "Check Out",
+                            "Instructor Name": co_instructor.strip(),
+                            "Customer / Candidate Name": co_customer.strip(),
+                            "Equipment IDs": eq_formatted,
+                            "Assessment Date": co_ass_date_str,
+                            "Inspection Result": "Not Inspected",
+                            "Notes / Damage Details": co_notes.strip(),
+                        }
+                        save_log(pd.DataFrame([new_entry_dict]))
+                        st.success("✅ Success! Your equipment has been successfully logged.")
+                        st.balloons()
+                        st.session_state.redirect_to_dashboard = True
+                        st.rerun()
+
+        with log_tab_return:
+            st.subheader("Return Equipment")
             active_customers = list(customer_to_equipment_map.keys())
+            
             if active_customers:
-                customer_name = st.selectbox(
-                    "Customer / Candidate Name",
-                    options=active_customers,
-                    key="input_customer_select",
-                )
-                allowed_equipment = customer_to_equipment_map.get(customer_name, [])
-                equipment_ids = st.multiselect(
-                    "Equipment IDs to Return",
-                    options=allowed_equipment,
-                    default=allowed_equipment,
-                    key="input_eq_return",
-                )
-            else:
-                st.info("No customers currently have equipment checked out to return.")
-                customer_name = ""
-                equipment_ids = []
-
-        else:
-            customer_name = st.text_input(
-                "Customer / Candidate Name (Optional)", key="input_customer_maint"
-            )
-            equipment_ids = st.multiselect(
-                "Equipment IDs (Required)",
-                options=all_asset_ids if all_asset_ids else [],
-                key="input_eq_maint",
-            )
-
-        col_cb, col_dt = st.columns([1, 1])
-        with col_cb:
-            include_assessment = st.checkbox(
-                "Include Assessment Date (Optional)",
-                value=False,
-                key="input_include_assessment",
-            )
-
-        assessment_date_str = ""
-        if include_assessment:
-            with col_dt:
-                assessment_date_val = st.date_input(
-                    "Assessment Date",
-                    value=datetime.date.today(),
-                    format="DD/MM/YYYY",
-                    key="input_assessment_date",
-                )
-                assessment_date_str = assessment_date_val.strftime("%d/%m/%Y")
-
-        inspection_result = st.selectbox(
-            "Inspection Result",
-            ["Not Inspected", "Pass", "Fail / Maintenance Required"],
-            index=0,
-            key="input_inspection",
-        )
-
-        notes = st.text_area(
-            "Notes / Damage Details"
-            + (
-                " (Required for Maintenance)"
-                if action_type == "Report Damage / Maintenance"
-                else ""
-            ),
-            key="input_notes",
-        )
-
-        submitted = st.button("Submit Entry", key="submit_log_btn")
-
-        has_reservation_warning = False
-        if submitted and action_type == "Check Out" and instructor_name:
-            for eq_id in equipment_ids:
-                eq_info = asset_data_map.get(eq_id, {})
-                if "RESERVED" in eq_info.get("status", ""):
-                    ass_dt = eq_info.get("assessment_date", "")
-                    st.warning(
-                        f"Warning: Equipment {eq_id} is reserved for assessment on {ass_dt} and cannot be booked out!"
+                with st.form("return_form_sub"):
+                    ret_instructor = st.text_input("Instructor Name", key="ret_inst")
+                    ret_customer = st.selectbox("Customer / Candidate Name / Group", options=active_customers, key="ret_cust_sel")
+                    
+                    default_checked_out = customer_to_equipment_map.get(ret_customer, [])
+                    ret_equipment = st.multiselect(
+                        "Equipment IDs to Return (Pre-selected automatically)",
+                        options=default_checked_out,
+                        default=default_checked_out,
+                        key="ret_eq_sel"
                     )
-                    has_reservation_warning = True
 
-        if submitted:
-            if has_reservation_warning:
-                st.error("Submission blocked: One or more selected items are reserved for assessment.")
-            elif action_type == "Report Damage / Maintenance" and (not equipment_ids or not notes.strip()):
-                st.error("For 'Report Damage / Maintenance', you must select Equipment IDs and provide Notes / Damage Details.")
-            elif not instructor_name:
-                st.error("Please provide the Instructor Name.")
-            elif not equipment_ids:
-                st.error("Please select Equipment IDs.")
+                    ret_inspection = st.selectbox(
+                        "Inspection Result",
+                        ["Pass", "Fail / Maintenance Required", "Not Inspected"],
+                        index=0,
+                        key="ret_insp"
+                    )
+                    ret_notes = st.text_area("Return Notes / Inspection Details", key="ret_notes")
+                    ret_submitted = st.form_submit_button("Submit Return")
+
+                    if ret_submitted:
+                        if not ret_instructor:
+                            st.error("Please provide the Instructor Name.")
+                        elif not ret_equipment:
+                            st.error("Please select Equipment IDs to return.")
+                        else:
+                            eq_formatted = ", ".join(ret_equipment)
+                            log_cust = "" if "Maintenance Return" in ret_customer else ret_customer.strip()
+                            new_entry_dict = {
+                                "Timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                                "Action Type": "Return Equipment",
+                                "Instructor Name": ret_instructor.strip(),
+                                "Customer / Candidate Name": log_cust,
+                                "Equipment IDs": eq_formatted,
+                                "Assessment Date": "",
+                                "Inspection Result": ret_inspection,
+                                "Notes / Damage Details": ret_notes.strip(),
+                            }
+                            save_log(pd.DataFrame([new_entry_dict]))
+
+                            if "Fail" in ret_inspection or "Maintenance" in ret_inspection:
+                                send_maintenance_email(new_entry_dict)
+
+                            st.success("✅ Success! Your equipment has been successfully logged.")
+                            st.balloons()
+                            st.session_state.redirect_to_dashboard = True
+                            st.rerun()
             else:
-                eq_formatted = ", ".join(equipment_ids)
-                new_entry_dict = {
-                    "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Action Type": action_type,
-                    "Instructor Name": instructor_name.strip(),
-                    "Customer / Candidate Name": str(customer_name).strip() if customer_name else "",
-                    "Equipment IDs": eq_formatted,
-                    "Assessment Date": assessment_date_str,
-                    "Inspection Result": inspection_result,
-                    "Notes / Damage Details": notes.strip(),
-                }
-                new_entry = pd.DataFrame([new_entry_dict])
-                save_log(new_entry)
+                if is_mobile_device:
+                    st.info("No active equipment returns available. (Note: Returning equipment from Maintenance requires the desktop version).")
+                else:
+                    st.info("No customers currently have equipment checked out to return.")
 
-                if action_type == "Report Damage / Maintenance":
-                    send_maintenance_email(new_entry_dict)
+        with log_tab_damage:
+            st.subheader("Report Damage or Maintenance")
+            with st.form("damage_form_sub"):
+                dmg_instructor = st.text_input("Instructor Name", key="dmg_inst")
+                dmg_customer = st.text_input("Customer / Candidate Name (Optional)", key="dmg_cust")
+                dmg_equipment = st.multiselect(
+                    "Equipment IDs (Required)",
+                    options=all_asset_ids if all_asset_ids else [],
+                    key="dmg_eq"
+                )
+                dmg_notes = st.text_area("Notes / Damage Details (Required)", key="dmg_notes")
+                dmg_submitted = st.form_submit_button("Submit Damage Report")
 
-                st.success("Log submitted successfully!")
-                st.rerun()
+                if dmg_submitted:
+                    if not dmg_instructor:
+                        st.error("Please provide the Instructor Name.")
+                    elif not dmg_equipment:
+                        st.error("Please select Equipment IDs.")
+                    elif not dmg_notes.strip():
+                        st.error("Please provide Notes / Damage Details.")
+                    else:
+                        eq_formatted = ", ".join(dmg_equipment)
+                        new_entry_dict = {
+                            "Timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                            "Action Type": "Report Damage / Maintenance",
+                            "Instructor Name": dmg_instructor.strip(),
+                            "Customer / Candidate Name": dmg_customer.strip() if dmg_customer else "",
+                            "Equipment IDs": eq_formatted,
+                            "Assessment Date": "",
+                            "Inspection Result": "Fail / Maintenance Required",
+                            "Notes / Damage Details": dmg_notes.strip(),
+                        }
+                        save_log(pd.DataFrame([new_entry_dict]))
+                        send_maintenance_email(new_entry_dict)
+
+                        st.success("✅ Success! Your equipment has been successfully logged.")
+                        st.balloons()
+                        st.session_state.redirect_to_dashboard = True
+                        st.rerun()
 
     elif nav_option == "Live Dashboard":
         render_header("Live Dashboard")
+
+        if is_mobile_device:
+            if st.button("🔄 Refresh Dashboard Data", use_container_width=True):
+                st.rerun()
+            st.markdown("---")
 
         dashboard_rows = []
         for aid in all_asset_ids:
@@ -586,15 +701,15 @@ def run():
             st.subheader("Manually Assign Assessment Date")
             with st.form("admin_assessment_form"):
                 target_asset = st.selectbox("Select Asset ID", options=all_asset_ids)
-                admin_ass_date = st.date_input("Assessment Date", value=datetime.date.today(), format="DD/MM/YYYY")
+                admin_ass_date = st.date_input("Assessment Date", value=None, format="DD/MM/YYYY")
                 admin_ass_notes = st.text_area("Notes / Reason")
                 admin_ass_submitted = st.form_submit_button("Save Assessment Date")
 
                 if admin_ass_submitted:
-                    if target_asset:
+                    if target_asset and admin_ass_date:
                         formatted_date = admin_ass_date.strftime("%d/%m/%Y")
                         new_entry = pd.DataFrame([{
-                            "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "Timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
                             "Action Type": "Admin Assessment Setup",
                             "Instructor Name": "Admin",
                             "Customer / Candidate Name": "Scheduled Assessment",
@@ -606,6 +721,8 @@ def run():
                         save_log(new_entry)
                         st.success(f"Assessment date {formatted_date} set for asset {target_asset}!")
                         st.rerun()
+                    else:
+                        st.error("Please select an Assessment Date.")
 
         with tab3:
             st.subheader("Live Dashboard Display Settings")
@@ -632,7 +749,7 @@ def run():
                     if sched_instructor and sched_equipment and sched_customer:
                         eq_formatted = ", ".join(sched_equipment)
                         new_entry = pd.DataFrame([{
-                            "Timestamp": sched_date.strftime("%Y-%m-%d 00:00:00"),
+                            "Timestamp": sched_date.strftime("%d/%m/%Y 00:00:00"),
                             "Action Type": "Scheduled Kit Hire",
                             "Instructor Name": sched_instructor.strip(),
                             "Customer / Candidate Name": sched_customer.strip(),
@@ -687,4 +804,34 @@ def run():
                 if not df_display.empty:
                     st.dataframe(df_display, use_container_width=True)
                 else:
-                    st.info(f"No damage or maintenance records found
+                    st.info(f"No damage or maintenance records found for {selected_asset_filter}.")
+            else:
+                st.info("No damage or maintenance reports have been logged in the system yet.")
+
+        with tab6:
+            st.subheader("Printable Mobile Home Screen Guide")
+            st.write("Use this page to print or save instructions for instructors on how to bookmark the inventory app onto their phone home screens.")
+
+            st.markdown("### 🪵 Greenway Training - Mobile Equipment Hub")
+            st.markdown("**Quick Access Guide for Field Instructors**")
+            st.write("To log equipment hires and damage reports quickly out in the field without typing web addresses, add this app directly to your phone's home screen.")
+            
+            st.markdown("---")
+            st.markdown("#### 📱 iPhone / iPad (Safari)")
+            st.markdown("1. Open the app link in **Safari**.")
+            st.markdown("2. Tap the **Share** button at the bottom toolbar (square with an arrow pointing up).")
+            st.markdown("3. Scroll down and select **'Add to Home Screen'**.")
+            st.markdown("4. Tap **Add** in the top-right corner. An icon will appear on your home screen.")
+
+            st.markdown("#### 🤖 Android (Chrome)")
+            st.markdown("1. Open the app link in **Google Chrome**.")
+            st.markdown("2. Tap the **three vertical dots** in the top-right corner.")
+            st.markdown("3. Select **'Add to Home screen'** or **'Install app'**.")
+            st.markdown("4. Tap **Install** or **Add** to confirm.")
+            
+            st.markdown("---")
+            st.info("💡 **Tip:** Press **Ctrl + P** (Windows) or **Cmd + P** (Mac) on your keyboard while viewing this tab to print this guide directly or save it as a PDF.")
+
+
+if __name__ == "__main__":
+    main()
